@@ -1,6 +1,10 @@
-# computer-vision-final-project
- Final project for the Computer Vision course.
+# Sport Video Analysis for Billiard Matches
 
+## Authors
+
+- [@Pooya Nasiri](https://github.com/PooyaNasiri)
+- [@Bahador Mirzazadeh](https://github.com/Baha2rM98)
+- [@Mohammadhossein Akbari](https://github.com/r4stin)
 # Instructions
 
 	$ mkdir build
