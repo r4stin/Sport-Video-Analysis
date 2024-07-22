@@ -6,6 +6,8 @@ class BallDetection {
 
 public:
     BallDetection();
+    bool process_video(const std::string& input_path,const std::string& output_path);
+
 
 
 
