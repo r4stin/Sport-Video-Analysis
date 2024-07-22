@@ -13,6 +13,25 @@
 
 BallDetection::BallDetection() = default;
 
+// Function to remove groups of pixels with area less than rmp
+cv::Mat BallDetection::removePixel(cv::Mat img, int rmp)
+{
+    cv::Mat labels;
+    int num_components = cv::connectedComponents(img, labels);
+
+    int min_size = rmp;
+    for (int i = 1; i < num_components; i++) {
+        cv::Mat component_mask = (labels == i);
+        int area = cv::countNonZero(component_mask);
+        if (area > min_size) {
+            img.setTo(0, component_mask);
+        }
+
+    }
+    return img;
+}
+
+
 
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
