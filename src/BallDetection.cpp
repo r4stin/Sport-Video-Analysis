@@ -32,6 +32,58 @@ cv::Mat BallDetection::removePixel(cv::Mat img, int rmp)
 }
 
 
+// Function to create a mask to detect balls on the table
+bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& roiRect) {
+    // Extract the region of interest
+    cv::Mat roi = frame(roiRect).clone();
+
+    // Apply KMeans to segment the image
+    TableDetection vp(this);
+    cv::Mat km = vp.KMeans(roi);
+
+    // Convert the image to grayscale
+    cv::Mat gray;
+    cv::cvtColor(roi, gray, cv::COLOR_BGR2GRAY);
+    // Apply Median Blur to reduce noise and Gaussian Blur to smooth the image
+    cv::medianBlur(gray, gray, 7);
+    cv::GaussianBlur(gray, gray, cv::Size(0, 0), 2);
+    // Apply Canny Edge Detection
+    cv::Mat edges;
+    cv::Canny(gray, edges, 50, 100);
+    // Apply Morphological Closing to close the gaps in the edges
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+    cv::morphologyEx(edges, edges, cv::MORPH_CLOSE, kernel);
+    // Find contours
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(edges, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+    // Create a mask for the contours
+    cv::Mat mask_ctr = cv::Mat::zeros(roi.size(), CV_8UC1);
+    cv::drawContours(mask_ctr, contours, -1, cv::Scalar(255, 255, 255), 3);
+    // Apply Morphological Dilation to thicken the contours
+    cv::Mat kernel_dilate = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,5));
+    cv::morphologyEx(mask_ctr, mask_ctr, cv::MORPH_DILATE, kernel_dilate, cv::Point(-1, -1), 2);
+    // Combine the KMeans mask with the contours mask to improve the segmentation
+    cv::bitwise_or(mask_ctr, km, km);
+    // Remove groups of pixels with area less than 3000
+    removePixel(km, 3000);
+    // Create a mask for the table
+    cv::Mat combined_mask = cv::Mat::zeros(frame.size(), CV_8UC1);
+    km.copyTo(combined_mask(roiRect));
+
+    // Combine the final mask with the original frame
+    cv::Mat final_mask;
+    cv::bitwise_and(frame, frame, final_mask, combined_mask);
+    findCenters fc(this);
+    centers_ = fc.findCenter(final_mask);
+    if (centers_.empty()) {
+        std::cerr << "Error: No circles detected!" << std::endl;
+        return false;
+    }
+
+    return true;
+
+}
+
 
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
@@ -63,6 +115,15 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
 
         cv::Mat frame_border;
         cv::copyMakeBorder(frame, frame_border, N, N, 0, 0, cv::BORDER_CONSTANT);
+        // Create a mask for the table to only process the table objects inside the table
+        cv::Mat mask_table;
+        cv::bitwise_and(frame, frame, mask_table, black);
+
+        // Process the table objects
+        if (!processTableObjects(mask_table, boundingRect)) {
+            std::cerr << "Error: Could not detect table objects" << std::endl;
+            return false;
+        }
 
         // Resize the minimap according to the frame size
         cv::Size mini_map_size(static_cast<int>(frame_border.rows * 0.25), static_cast<int>(frame_border.cols * 0.25));
