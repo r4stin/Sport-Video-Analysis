@@ -19,10 +19,15 @@ public:
 
 
 private:
+    cv::VideoCapture capture_;
+    std::vector<cv::Point2f> centers_;
+    std::vector<cv::Point2f> centers_ref_;
+    std::vector<float> radius_;
 
 
 
-        friend class TableDetection;
+
+    friend class TableDetection;
         friend class findCenters;
 
 };
