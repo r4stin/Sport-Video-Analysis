@@ -85,6 +85,63 @@ bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& ro
 }
 
 
+bool BallDetection::centerRefinement(cv::Mat img){
+
+    // access to friend class
+    for (auto & i : centers_) {
+
+        float cX = i.x;
+        float cY = i.y;
+
+        int radius1 = 30;
+        cv::Mat mask1 = cv::Mat::zeros(img.size(), CV_8UC1);
+        cv::circle(mask1, cv::Point2f(cX, cY), radius1, cv::Scalar(255), -1);
+
+        cv::Mat circle_mask;
+        cv::bitwise_and(img, img, circle_mask, mask1);
+
+
+        // split the channels
+        std::vector<cv::Mat> channels;
+        cv::split(circle_mask, channels);
+
+        // only use the red
+        cv::Mat red = channels[2];
+
+        cv::Mat gray;
+        cv::cvtColor(circle_mask, gray, cv::COLOR_BGR2GRAY);
+
+        // Apply Hough Circle Transform
+        std::vector<cv::Vec3f> circles;
+        cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 1, gray.rows / 16, 107, 10, 5, 15);
+        if (circles.empty()) {
+            cv::HoughCircles(red, circles, cv::HOUGH_GRADIENT, 1, gray.rows / 16, 107, 10, 5, 15);
+        }
+
+        if (circles.empty()) {
+            std::cerr << "Error: No circles detected!" << std::endl;
+            return false;
+        }
+
+        // Create a black image to draw white circles
+        cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+        // Draw the circles
+        for (auto c : circles) {
+            cv::Point2f center = cv::Point2f(c[0], c[1]);
+            float radius = c[2];
+            if (radius < 6.5) radius = 7.1;
+            // Draw and fill the circle
+            cv::circle(mask, center, radius, cv::Scalar(255), -1, cv::LINE_AA);
+            radius_.push_back(radius + 2);
+            centers_ref_.push_back(center);
+
+        }
+    }
+
+    return true;
+}
+
+
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
     std::cout << "Processing video..." << std::endl;
@@ -143,6 +200,10 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
         // Process the table objects
         if (!processTableObjects(mask_table, boundingRect)) {
             std::cerr << "Error: Could not detect table objects" << std::endl;
+            return false;
+        }
+        if (!centerRefinement(frame)){
+            std::cerr << "Error: Could not refine the circles" << std::endl;
             return false;
         }
 
