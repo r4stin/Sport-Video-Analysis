@@ -110,6 +110,27 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
     cv::Mat firstFrame, frame;
     // Read the first frame to detect the table corners
     capture_ >> firstFrame;
+    TableDetection vp(this);
+    if (!vp.detectTableCorners(firstFrame)) {
+        std::cerr << "Error: Could not detect table corners" << std::endl;
+        return false;
+    }
+    std::vector<cv::Point2f> sortedCorners = sortCorners(vp.tableCorners_);
+
+    cv::Rect boundingRect = cv::boundingRect(sortedCorners);
+
+    cv::Mat black = cv::Mat::zeros(firstFrame.size(), CV_8UC1);
+
+    cv::Mat green = firstFrame.clone();
+
+    cv::Scalar fieldColor(5, 5, 5);
+
+    std::vector<cv::Point> corners;
+    for (const auto& pt : sortedCorners) {
+        corners.emplace_back(pt);
+    }
+    cv::fillConvexPoly(black, corners, fieldColor);
+    cv::fillConvexPoly(green, corners, cv::Scalar(0, 255, 0));
 
     while (capture_.read(frame)) {
 
