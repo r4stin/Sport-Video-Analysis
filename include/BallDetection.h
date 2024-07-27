@@ -20,6 +20,7 @@ public:
 
 private:
     cv::VideoCapture capture_;
+    cv::Mat top_view_;
     std::vector<cv::Point2f> centers_;
     std::vector<cv::Point2f> centers_ref_;
     std::vector<float> radius_;
