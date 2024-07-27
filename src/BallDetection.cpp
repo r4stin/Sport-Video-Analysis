@@ -142,6 +142,42 @@ bool BallDetection::centerRefinement(cv::Mat img){
 }
 
 
+bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPositions, const cv::Mat& img, const std::vector<cv::Point2f>& tableCorners) {
+    cv::Mat output = cv::Mat::zeros(img.size(), CV_8UC1); // Create a black image
+
+    std::vector<cv::Point2f> pts2;
+    pts2.emplace_back(0, 0);                                      // top left
+    pts2.emplace_back(static_cast<float>(width_ - 1), 0);         // top right
+    pts2.emplace_back(0, static_cast<float>(height_ - 1));        // bottom left
+    pts2.emplace_back(static_cast<float>(width_ - 1), height_ - 1); // bottom right
+
+    // Calculate the perspective transformation matrix
+    cv::Mat transformMatrix = cv::getPerspectiveTransform(tableCorners, pts2);
+
+    // Transform ball positions to the minimap
+    std::vector<cv::Point2f> minimapBallPositions;
+    for (const auto& pos : ballPositions) {
+        minimapBallPositions.push_back(transformPoint(pos, transformMatrix));
+    }
+    // Warp the image to the minimap
+    cv::Mat minimap;
+    cv::warpPerspective(img, minimap, transformMatrix, cv::Size(width_, height_));
+    // Create the table
+    cv::Mat background = create_table(width_, height_);
+    // Draw the balls on the minimap
+    cv::Mat final = draw_balls(minimapBallPositions, background, 12, -1, minimap);
+    // Draw the holes on the table
+    top_view_ = draw_holes(final);
+    if (top_view_.empty()) {
+        std::cerr << "Error: Could not create the minimap" << std::endl;
+        return false;
+    }
+
+    return true;
+
+}
+
+
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
     std::cout << "Processing video..." << std::endl;
@@ -204,6 +240,11 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
         }
         if (!centerRefinement(frame)){
             std::cerr << "Error: Could not refine the circles" << std::endl;
+            return false;
+        }
+        // Create the minimap
+        if (!createTopViewMinimap(centers_ref_, frame, vp.tableCorners_)) {
+            std::cerr << "Error: Could not create the minimap" << std::endl;
             return false;
         }
 
