@@ -178,6 +178,43 @@ bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPos
 }
 
 
+bool compareY(const cv::Point2f &a, const cv::Point2f &b) {
+    return a.y < b.y;
+}
+
+bool compareX(const cv::Point2f &a, const cv::Point2f &b) {
+    return a.x < b.x;
+}
+// Function to sort the corners of the table
+std::vector<cv::Point2f> sortCorners(const std::vector<cv::Point2f>& corners) {
+    // Ensure there are exactly 4 points
+    if (corners.size() != 4) {
+        throw std::runtime_error("There must be exactly 4 points to sort.");
+    }
+
+    // Sort the points by y-coordinate
+    std::vector<cv::Point2f> sortedCorners = corners;
+    std::sort(sortedCorners.begin(), sortedCorners.end(), compareY);
+
+    // The top-most points will be the first two in the sorted list
+    std::vector<cv::Point2f> topMost(sortedCorners.begin(), sortedCorners.begin() + 2);
+    // The bottom-most points will be the last two in the sorted list
+    std::vector<cv::Point2f> bottomMost(sortedCorners.begin() + 2, sortedCorners.end());
+
+    // Sort top-most points by x-coordinate to get top-left and top-right
+    std::sort(topMost.begin(), topMost.end(), compareX);
+    cv::Point2f topLeft = topMost[0];
+    cv::Point2f topRight = topMost[1];
+
+    // Sort bottom-most points by x-coordinate to get bottom-left and bottom-right
+    std::sort(bottomMost.begin(), bottomMost.end(), compareX);
+    cv::Point2f bottomLeft = bottomMost[0];
+    cv::Point2f bottomRight = bottomMost[1];
+
+    // Return the points in the order: top-left, top-right, bottom-right, bottom-left
+    return {topLeft, topRight, bottomRight, bottomLeft};
+}
+
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
     std::cout << "Processing video..." << std::endl;
