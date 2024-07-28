@@ -84,6 +84,15 @@ bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& ro
 
 }
 
+// Function to create the table
+cv::Mat BallDetection::create_table(int width, int height) {
+    cv::Mat img(height, width, CV_8UC3, cv::Scalar(255, 255, 255)); // create 2D table image
+    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+
+    return img;
+}
+
+
 
 bool BallDetection::centerRefinement(cv::Mat img){
 
