@@ -84,6 +84,87 @@ bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& ro
 
 }
 
+// Function to create the table
+cv::Mat BallDetection::create_table(int width, int height) {
+    cv::Mat img(height, width, CV_8UC3, cv::Scalar(255, 255, 255)); // create 2D table image
+    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+
+    return img;
+}
+
+
+
+// Function to draw balls on the table
+cv::Mat BallDetection::draw_balls(const std::vector<cv::Point2f>& minimapBallPositions, const cv::Mat& background, int radius = 7, int size = -1, const cv::Mat& img = cv::Mat()) {
+    cv::Mat final = background.clone(); // canvas
+    std::vector<double> l2_norms(minimapBallPositions.size(), 0.0);
+
+    // Calculate the mean color and L2 norm for each position
+    for (size_t i = 0; i < minimapBallPositions.size(); ++i) {
+        cv::Point2f position = minimapBallPositions[i];
+
+        float cX = position.x;
+        float cY = position.y;
+
+        cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+        cv::circle(mask, cv::Point2f(cX, cY), radius_[i], cv::Scalar(255), -1);
+
+        cv::Scalar meanColor = cv::mean(img, mask);
+
+        // Calculate L2 norm of the mean color
+        double l2_norm = cv::norm(meanColor);
+        l2_norms[i] = l2_norm;
+    }
+
+    // Find the min and max L2 norm values
+    auto minmax = std::minmax_element(l2_norms.begin(), l2_norms.end());
+    double min_val = *minmax.first;
+    double max_val = *minmax.second;
+
+    // Draw the balls with assigned colors based on L2 norms
+    for (size_t i = 0; i < minimapBallPositions.size(); ++i) {
+//        cv::Point2f position = minimapBallPositions[i];
+        cv::Point2f position = minimapBallPositions[i];
+        int cX = static_cast<int>(position.x);
+        int cY = static_cast<int>(position.y);
+
+        cv::Scalar color;
+
+        if (l2_norms[i] == max_val) {
+            color = cv::Scalar(255, 255, 255); // White color for max L2 norm
+        } else if (l2_norms[i] == min_val) {
+            color = cv::Scalar(0, 0, 0); // Black color for min L2 norm
+        } else if (l2_norms[i] < max_val && l2_norms[i] > 200) {
+            color = cv::Scalar(255, 0, 0); // Blue color for L2 norm > 200
+
+        } else if (l2_norms[i] < 200 && l2_norms[i] > min_val) {
+            color = cv::Scalar(0, 0, 255); // Red color for L2 norm < 200
+
+        } else {
+            std::cout << "No color detected" << std::endl;
+            continue;
+        }
+        // Store the points to for tracking
+        points_.push_back(cv::Point2f(cX, cY));
+
+        for (const auto& pt : points_) {
+            cv::circle(final, pt, 2, cv::Scalar(0, 0, 0), -1);
+        }
+        // Draw the ball
+        cv::circle(final, cv::Point(cX, cY), radius, color, size);
+
+        // Add black color around the drawn ball (for cosmetics)
+        cv::circle(final, cv::Point(cX, cY), radius, cv::Scalar(0), 2);
+
+        // Small circle for light reflection
+        cv::circle(final, cv::Point(cX - 2, cY - 2), 4, cv::Scalar(255, 255, 255), -1);
+
+    }
+
+    return final;
+}
+
+
 
 bool BallDetection::centerRefinement(cv::Mat img){
 
@@ -177,6 +258,43 @@ bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPos
 
 }
 
+
+bool compareY(const cv::Point2f &a, const cv::Point2f &b) {
+    return a.y < b.y;
+}
+
+bool compareX(const cv::Point2f &a, const cv::Point2f &b) {
+    return a.x < b.x;
+}
+// Function to sort the corners of the table
+std::vector<cv::Point2f> sortCorners(const std::vector<cv::Point2f>& corners) {
+    // Ensure there are exactly 4 points
+    if (corners.size() != 4) {
+        throw std::runtime_error("There must be exactly 4 points to sort.");
+    }
+
+    // Sort the points by y-coordinate
+    std::vector<cv::Point2f> sortedCorners = corners;
+    std::sort(sortedCorners.begin(), sortedCorners.end(), compareY);
+
+    // The top-most points will be the first two in the sorted list
+    std::vector<cv::Point2f> topMost(sortedCorners.begin(), sortedCorners.begin() + 2);
+    // The bottom-most points will be the last two in the sorted list
+    std::vector<cv::Point2f> bottomMost(sortedCorners.begin() + 2, sortedCorners.end());
+
+    // Sort top-most points by x-coordinate to get top-left and top-right
+    std::sort(topMost.begin(), topMost.end(), compareX);
+    cv::Point2f topLeft = topMost[0];
+    cv::Point2f topRight = topMost[1];
+
+    // Sort bottom-most points by x-coordinate to get bottom-left and bottom-right
+    std::sort(bottomMost.begin(), bottomMost.end(), compareX);
+    cv::Point2f bottomLeft = bottomMost[0];
+    cv::Point2f bottomRight = bottomMost[1];
+
+    // Return the points in the order: top-left, top-right, bottom-right, bottom-left
+    return {topLeft, topRight, bottomRight, bottomLeft};
+}
 
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
