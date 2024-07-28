@@ -10,6 +10,7 @@ public:
     bool processTableObjects(const cv::Mat& frame, const cv::Rect& roiRect);
     bool process_video(const std::string& input_path,const std::string& output_path);
     cv::Mat create_table(int width, int height);
+    cv::Mat draw_balls( const std::vector<cv::Point2f>& minimapBallPositions, const cv::Mat& background, int radius, int size, const cv::Mat& img);
 
 
 

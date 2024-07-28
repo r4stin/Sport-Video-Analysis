@@ -94,6 +94,78 @@ cv::Mat BallDetection::create_table(int width, int height) {
 
 
 
+// Function to draw balls on the table
+cv::Mat BallDetection::draw_balls(const std::vector<cv::Point2f>& minimapBallPositions, const cv::Mat& background, int radius = 7, int size = -1, const cv::Mat& img = cv::Mat()) {
+    cv::Mat final = background.clone(); // canvas
+    std::vector<double> l2_norms(minimapBallPositions.size(), 0.0);
+
+    // Calculate the mean color and L2 norm for each position
+    for (size_t i = 0; i < minimapBallPositions.size(); ++i) {
+        cv::Point2f position = minimapBallPositions[i];
+
+        float cX = position.x;
+        float cY = position.y;
+
+        cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+        cv::circle(mask, cv::Point2f(cX, cY), radius_[i], cv::Scalar(255), -1);
+
+        cv::Scalar meanColor = cv::mean(img, mask);
+
+        // Calculate L2 norm of the mean color
+        double l2_norm = cv::norm(meanColor);
+        l2_norms[i] = l2_norm;
+    }
+
+    // Find the min and max L2 norm values
+    auto minmax = std::minmax_element(l2_norms.begin(), l2_norms.end());
+    double min_val = *minmax.first;
+    double max_val = *minmax.second;
+
+    // Draw the balls with assigned colors based on L2 norms
+    for (size_t i = 0; i < minimapBallPositions.size(); ++i) {
+//        cv::Point2f position = minimapBallPositions[i];
+        cv::Point2f position = minimapBallPositions[i];
+        int cX = static_cast<int>(position.x);
+        int cY = static_cast<int>(position.y);
+
+        cv::Scalar color;
+
+        if (l2_norms[i] == max_val) {
+            color = cv::Scalar(255, 255, 255); // White color for max L2 norm
+        } else if (l2_norms[i] == min_val) {
+            color = cv::Scalar(0, 0, 0); // Black color for min L2 norm
+        } else if (l2_norms[i] < max_val && l2_norms[i] > 200) {
+            color = cv::Scalar(255, 0, 0); // Blue color for L2 norm > 200
+
+        } else if (l2_norms[i] < 200 && l2_norms[i] > min_val) {
+            color = cv::Scalar(0, 0, 255); // Red color for L2 norm < 200
+
+        } else {
+            std::cout << "No color detected" << std::endl;
+            continue;
+        }
+        // Store the points to for tracking
+        points_.push_back(cv::Point2f(cX, cY));
+
+        for (const auto& pt : points_) {
+            cv::circle(final, pt, 2, cv::Scalar(0, 0, 0), -1);
+        }
+        // Draw the ball
+        cv::circle(final, cv::Point(cX, cY), radius, color, size);
+
+        // Add black color around the drawn ball (for cosmetics)
+        cv::circle(final, cv::Point(cX, cY), radius, cv::Scalar(0), 2);
+
+        // Small circle for light reflection
+        cv::circle(final, cv::Point(cX - 2, cY - 2), 4, cv::Scalar(255, 255, 255), -1);
+
+    }
+
+    return final;
+}
+
+
+
 bool BallDetection::centerRefinement(cv::Mat img){
 
     // access to friend class
