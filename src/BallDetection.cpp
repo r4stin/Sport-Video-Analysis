@@ -85,6 +85,99 @@ bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& ro
 }
 
 
+bool BallDetection::centerRefinement(cv::Mat img){
+
+    // access to friend class
+    for (auto & i : centers_) {
+
+        float cX = i.x;
+        float cY = i.y;
+
+        int radius1 = 30;
+        cv::Mat mask1 = cv::Mat::zeros(img.size(), CV_8UC1);
+        cv::circle(mask1, cv::Point2f(cX, cY), radius1, cv::Scalar(255), -1);
+
+        cv::Mat circle_mask;
+        cv::bitwise_and(img, img, circle_mask, mask1);
+
+
+        // split the channels
+        std::vector<cv::Mat> channels;
+        cv::split(circle_mask, channels);
+
+        // only use the red
+        cv::Mat red = channels[2];
+
+        cv::Mat gray;
+        cv::cvtColor(circle_mask, gray, cv::COLOR_BGR2GRAY);
+
+        // Apply Hough Circle Transform
+        std::vector<cv::Vec3f> circles;
+        cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 1, gray.rows / 16, 107, 10, 5, 15);
+        if (circles.empty()) {
+            cv::HoughCircles(red, circles, cv::HOUGH_GRADIENT, 1, gray.rows / 16, 107, 10, 5, 15);
+        }
+
+        if (circles.empty()) {
+            std::cerr << "Error: No circles detected!" << std::endl;
+            return false;
+        }
+
+        // Create a black image to draw white circles
+        cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+        // Draw the circles
+        for (auto c : circles) {
+            cv::Point2f center = cv::Point2f(c[0], c[1]);
+            float radius = c[2];
+            if (radius < 6.5) radius = 7.1;
+            // Draw and fill the circle
+            cv::circle(mask, center, radius, cv::Scalar(255), -1, cv::LINE_AA);
+            radius_.push_back(radius + 2);
+            centers_ref_.push_back(center);
+
+        }
+    }
+
+    return true;
+}
+
+
+bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPositions, const cv::Mat& img, const std::vector<cv::Point2f>& tableCorners) {
+    cv::Mat output = cv::Mat::zeros(img.size(), CV_8UC1); // Create a black image
+
+    std::vector<cv::Point2f> pts2;
+    pts2.emplace_back(0, 0);                                      // top left
+    pts2.emplace_back(static_cast<float>(width_ - 1), 0);         // top right
+    pts2.emplace_back(0, static_cast<float>(height_ - 1));        // bottom left
+    pts2.emplace_back(static_cast<float>(width_ - 1), height_ - 1); // bottom right
+
+    // Calculate the perspective transformation matrix
+    cv::Mat transformMatrix = cv::getPerspectiveTransform(tableCorners, pts2);
+
+    // Transform ball positions to the minimap
+    std::vector<cv::Point2f> minimapBallPositions;
+    for (const auto& pos : ballPositions) {
+        minimapBallPositions.push_back(transformPoint(pos, transformMatrix));
+    }
+    // Warp the image to the minimap
+    cv::Mat minimap;
+    cv::warpPerspective(img, minimap, transformMatrix, cv::Size(width_, height_));
+    // Create the table
+    cv::Mat background = create_table(width_, height_);
+    // Draw the balls on the minimap
+    cv::Mat final = draw_balls(minimapBallPositions, background, 12, -1, minimap);
+    // Draw the holes on the table
+    top_view_ = draw_holes(final);
+    if (top_view_.empty()) {
+        std::cerr << "Error: Could not create the minimap" << std::endl;
+        return false;
+    }
+
+    return true;
+
+}
+
+
 // Function to process the video
 bool BallDetection::process_video(const std::string& input_path,const std::string& output_path) {
     std::cout << "Processing video..." << std::endl;
@@ -110,6 +203,27 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
     cv::Mat firstFrame, frame;
     // Read the first frame to detect the table corners
     capture_ >> firstFrame;
+    TableDetection vp(this);
+    if (!vp.detectTableCorners(firstFrame)) {
+        std::cerr << "Error: Could not detect table corners" << std::endl;
+        return false;
+    }
+    std::vector<cv::Point2f> sortedCorners = sortCorners(vp.tableCorners_);
+
+    cv::Rect boundingRect = cv::boundingRect(sortedCorners);
+
+    cv::Mat black = cv::Mat::zeros(firstFrame.size(), CV_8UC1);
+
+    cv::Mat green = firstFrame.clone();
+
+    cv::Scalar fieldColor(5, 5, 5);
+
+    std::vector<cv::Point> corners;
+    for (const auto& pt : sortedCorners) {
+        corners.emplace_back(pt);
+    }
+    cv::fillConvexPoly(black, corners, fieldColor);
+    cv::fillConvexPoly(green, corners, cv::Scalar(0, 255, 0));
 
     while (capture_.read(frame)) {
 
@@ -122,6 +236,15 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
         // Process the table objects
         if (!processTableObjects(mask_table, boundingRect)) {
             std::cerr << "Error: Could not detect table objects" << std::endl;
+            return false;
+        }
+        if (!centerRefinement(frame)){
+            std::cerr << "Error: Could not refine the circles" << std::endl;
+            return false;
+        }
+        // Create the minimap
+        if (!createTopViewMinimap(centers_ref_, frame, vp.tableCorners_)) {
+            std::cerr << "Error: Could not create the minimap" << std::endl;
             return false;
         }
 
