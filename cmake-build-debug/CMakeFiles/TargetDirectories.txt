@@ -1,0 +1,4 @@
+/home/elsa/Clionprojects/Sport-Video-Analysis/cmake-build-debug/CMakeFiles/cv_final.dir
+/home/elsa/Clionprojects/Sport-Video-Analysis/cmake-build-debug/CMakeFiles/Starter.dir
+/home/elsa/Clionprojects/Sport-Video-Analysis/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/elsa/Clionprojects/Sport-Video-Analysis/cmake-build-debug/CMakeFiles/rebuild_cache.dir
