@@ -166,6 +166,50 @@ cv::Mat BallDetection::draw_balls(const std::vector<cv::Point2f>& minimapBallPos
 
 
 
+// Function to draw holes on the table
+cv::Mat BallDetection::draw_holes(const cv::Mat& input_img) {
+    cv::Scalar color(190, 190, 190);
+    cv::Scalar color2(0, 0, 0);
+
+    cv::Mat img = input_img.clone();
+
+    int width = width_;
+    int height = height_;
+
+
+
+    cv::line(img, cv::Point(0, 0), cv::Point(width, 0), color2, 3); // top
+    cv::line(img, cv::Point(0, height), cv::Point(width, height), color2, 3); // bottom
+    cv::line(img, cv::Point(0, 0), cv::Point(0, height), color2, 3); // left
+    cv::line(img, cv::Point(width, 0), cv::Point(width, height), color2, 3); // right
+
+    int offset = 10;
+
+    cv::line(img, cv::Point(0, offset), cv::Point(width, offset), color2, 3); // top offset
+    cv::line(img, cv::Point(0, height - offset), cv::Point(width, height - offset), color2, 3); // bottom offset
+    cv::line(img, cv::Point(offset, 0), cv::Point(offset, height), color2, 3); // left offset
+    cv::line(img, cv::Point(width - offset, 0), cv::Point(width - offset, height), color2, 3); // right offset
+
+
+    cv::circle(img, cv::Point(0, 0), 25, color, -1); // top left
+    cv::circle(img, cv::Point(width, 0), 25, color, -1); // top right
+    cv::circle(img, cv::Point(0, height), 25, color, -1); // bottom left
+    cv::circle(img, cv::Point(width, height), 25, color, -1); // bottom right
+    cv::circle(img, cv::Point(width, height / 2), 17, color, -1); // mid right
+    cv::circle(img, cv::Point(0, height / 2), 17, color, -1); // mid left
+
+    cv::circle(img, cv::Point(width, 0), 17, color2, -1); // top right
+    cv::circle(img, cv::Point(0, 0), 17, color2, -1); // top left
+    cv::circle(img, cv::Point(0, height), 17, color2, -1); // bottom left
+    cv::circle(img, cv::Point(width, height), 17, color2, -1); // bottom right
+    cv::circle(img, cv::Point(width, height / 2), 13, color2, -1); // mid right
+    cv::circle(img, cv::Point(0, height / 2), 13, color2, -1); // mid left
+//    cv::imwrite("table.png", img);
+    return img;
+
+}
+
+
 bool BallDetection::centerRefinement(cv::Mat img){
 
     // access to friend class
