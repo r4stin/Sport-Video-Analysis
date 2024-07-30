@@ -372,6 +372,39 @@ bool BallDetection::outputGenerator(const std::vector<cv::Point2f>& ballPosition
 }
 
 
+void BallDetection::saveDetections(const std::string& filename, const std::vector<cv::Point2f>& centers, const std::vector<int>& labels, const std::vector<cv::Rect>& boundingBoxes) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to to save outputs" << std::endl;
+        return;
+    }
+
+    // sort according to labels
+    std::vector<std::pair<int, std::pair<cv::Point2f, cv::Rect>>> sorted;
+    for (size_t i = 0; i < centers.size(); ++i) {
+        sorted.push_back({labels[i], {centers[i], boundingBoxes[i]}});
+    }
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    // Write the data to the file
+    for (auto & i : sorted) {
+        const auto& data = i.second;
+        const auto& center = data.first;
+        const auto& box = data.second;
+        int x = box.x;
+        int y = box.y;
+        int width = box.width;
+        int height = box.height;
+        int label = i.first;
+
+        file << x << " " << y << " " << width << " " << height << " " << label << std::endl;
+    }
+
+    file.close();
+}
+
+
 bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPositions, const cv::Mat& img, const std::vector<cv::Point2f>& tableCorners) {
     cv::Mat output = cv::Mat::zeros(img.size(), CV_8UC1); // Create a black image
 
