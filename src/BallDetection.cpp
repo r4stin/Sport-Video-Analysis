@@ -84,6 +84,15 @@ bool BallDetection::processTableObjects(const cv::Mat& frame, const cv::Rect& ro
 
 }
 
+// Function to transform a point using a perspective transformation matrix
+cv::Point2f BallDetection::transformPoint(const cv::Point2f& point, const cv::Mat& transformMatrix) {
+    std::vector<cv::Point2f> src(1, point);
+    std::vector<cv::Point2f> dst(1);
+    perspectiveTransform(src, dst, transformMatrix);
+    return dst[0];
+}
+
+
 // Function to create the table
 cv::Mat BallDetection::create_table(int width, int height) {
     cv::Mat img(height, width, CV_8UC3, cv::Scalar(255, 255, 255)); // create 2D table image
