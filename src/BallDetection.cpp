@@ -267,6 +267,111 @@ bool BallDetection::centerRefinement(cv::Mat img){
 }
 
 
+// Function to segment the image and produce outputs
+bool BallDetection::outputGenerator(const std::vector<cv::Point2f>& ballPositions, const cv::Mat& img, int radius, const cv::Mat& mask_table, const cv::Mat& bb_table, const std::string& filename) {
+    if (ballPositions.empty()) {
+        std::cerr << "Error: No ball positions detected!" << std::endl;
+        return false;
+    }
+    cv::Mat rec_table = img.clone();
+    std::vector<int> labels;
+    std::vector<cv::Rect> boundingBoxes;
+
+    // Define the colors for each category
+    cv::Scalar whiteColor(1, 1, 1);
+    cv::Scalar blackColor(2, 2, 2);
+    cv::Scalar solidColor(3, 3, 3);
+    cv::Scalar stripedColor(4, 4, 4);
+
+    // Calculate the mean color and L2 norm for each position
+    std::vector<double> l2_norms(ballPositions.size(), 0.0);
+    for (size_t i = 0; i < ballPositions.size(); ++i) {
+
+        float cX = ballPositions[i].x;
+        float cY = ballPositions[i].y;
+
+
+        cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+        cv::circle(mask, cv::Point2f(cX, cY), radius_[i], cv::Scalar(255), -1);
+
+
+        cv::Scalar meanColor = cv::mean(img, mask);
+
+        // Calculate L2 norm of the mean color
+        double l2_norm = cv::norm(meanColor);
+        l2_norms[i] = l2_norm;
+
+    }
+
+    // Find the min and max L2 norm values
+    auto minmax = std::minmax_element(l2_norms.begin(), l2_norms.end());
+    double min_val = *minmax.first;
+    double max_val = *minmax.second;
+
+    // Draw the balls with assigned colors based on L2 norms
+    for (size_t i = 0; i < ballPositions.size(); ++i) {
+
+        float cX = centers_ref_[i].x;
+        float cY = centers_ref_[i].y;
+
+
+        cv::Scalar color_mask, color_bb;
+        int label;
+
+        if (l2_norms[i] == max_val) {
+            color_mask = whiteColor; // White ball for max L2 norm
+            color_bb = cv::Scalar(255, 255, 255); // White border for max L2 norm
+            label = 1;
+        } else if (l2_norms[i] == min_val) {
+            color_mask = blackColor; // Black ball for min L2 norm
+            color_bb = cv::Scalar(0, 0, 0); // Black border for min L2 norm
+            label = 2;
+        } else if (l2_norms[i] < max_val && l2_norms[i] > 200) {
+            color_mask = stripedColor; // Striped ball for L2 norm > 200
+            color_bb = cv::Scalar(255, 0, 0); //Blue border for L2 norm > 200
+            label = 4;
+        } else if (l2_norms[i] < 200 && l2_norms[i] > min_val) {
+            color_mask = solidColor; // Solid ball for L2 norm <= 200
+            color_bb = cv::Scalar(0, 0, 255); // Red border for L2 norm <= 200
+            label = 3;
+        } else {
+            continue;
+        }
+
+        // Draw the ball on the segmentation mask
+        cv::circle(mask_table, cv::Point2f(cX, cY), radius_[i], color_mask, -1);
+        // Draw the ball on the bounding box mask
+        cv::circle(bb_table, cv::Point2f(cX, cY), radius_[i], color_bb, -1);
+
+        cv::Rect2f rect(cX - radius_[i], cY - radius_[i], 2.0 * radius_[i], 2.0 * radius_[i]);
+
+        // Draw the rectangle on the output image
+        cv::rectangle(rec_table, rect, color_bb, 2);
+
+
+        labels.push_back(label);
+        boundingBoxes.push_back(rect);
+
+    }
+    // Define output image names by adding a name into filename
+
+    std::string mask_table_name = filename + "_mask_table.png";
+    std::string bb_output_name = filename + "_bb.txt";
+    std::string rec_table_name = filename + "_output1.png";
+    std::string bb_table_name = filename + "_output2.png";
+
+    cv::imwrite(mask_table_name, mask_table);
+    cv::imwrite(rec_table_name, rec_table);
+    cv::imwrite(bb_table_name, bb_table);
+
+
+    saveDetections(bb_output_name, ballPositions, labels, boundingBoxes);
+
+
+    return true;
+}
+
+
 bool BallDetection::createTopViewMinimap(const std::vector<cv::Point2f>& ballPositions, const cv::Mat& img, const std::vector<cv::Point2f>& tableCorners) {
     cv::Mat output = cv::Mat::zeros(img.size(), CV_8UC1); // Create a black image
 
@@ -409,6 +514,24 @@ bool BallDetection::process_video(const std::string& input_path,const std::strin
             std::cerr << "Error: Could not create the minimap" << std::endl;
             return false;
         }
+
+        // Generate outputs only on first frame and last frame
+        if (frame_num == 0){
+//            cv::imwrite("first_frame.png", frame);
+            if (!outputGenerator(centers_ref_, frame, 10, black, green, "first")) {
+                std::cerr << "Error: Could not segment the image" << std::endl;
+                return false;
+            }
+
+        } else if (frame_num == total_frames - 2){
+            cv::imwrite("final_2d.png", top_view_);
+            if (!outputGenerator(centers_ref_, frame, 10, black, green, "last")) {
+                std::cerr << "Error: Could not segment the image" << std::endl;
+                return false;
+            }
+
+        }
+
 
         // Resize the minimap according to the frame size
         cv::Size mini_map_size(static_cast<int>(frame_border.rows * 0.25), static_cast<int>(frame_border.cols * 0.25));
