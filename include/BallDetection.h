@@ -66,6 +66,8 @@ private:
 class findCenters {
 public:
     explicit findCenters(BallDetection *ballDetection1);
+    std::vector<cv::Point2f> findCenter(cv::Mat img);
+
 
 
 
